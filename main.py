@@ -26,7 +26,7 @@ def numpyToImg(img):
 
 
 
-def updateImage(window, cam, model):
+def updateImage(window, cam, model, userChoices):
 
     kpColors = [
         (255, 0, 0),    # Blue
@@ -64,9 +64,10 @@ def updateImage(window, cam, model):
                                     cv2.line(picture, (int(x), int(y)), previousPoint, color=kpColors[idx], thickness=2)
                                 previousPoint = (int(x), int(y))
 
-                for obj in result.boxes:
-                    for x0, y0, x1, y1 in obj.xyxy:
-                        cv2.rectangle(picture, (int(x0), int(y0)), (int(x1), int(y1)), color=(255, 255, 0), thickness=2)
+                if userChoices['BoundingBoxOn']:
+                    for obj in result.boxes:
+                        for x0, y0, x1, y1 in obj.xyxy:
+                            cv2.rectangle(picture, (int(x0), int(y0)), (int(x1), int(y1)), color=(255, 255, 0), thickness=2)
 
             picture_data = numpyToImg(picture)
             window['-IMAGE-'].update(data=picture_data)
@@ -84,6 +85,11 @@ def mainWindow():
 
     model = YOLO("yolo11n-pose.pt")
 
+    userChoices = {
+                    'BoundingBoxOn': False,
+                    #'KeyPointsOn': False
+                }
+    
     if not cam.isOpened():
         print("Cannot open camera")
         return
@@ -93,18 +99,34 @@ def mainWindow():
     picture_data = numpyToImg(placeholder)
 
     layout = [
-        [sg.Text('Image Viewer 1.0')],
-        [sg.Image(data=picture_data, key='-IMAGE-')]
+        [
+            sg.Column([
+                [sg.Text('Image Viewer 1.0')],
+                [sg.Image(data=picture_data, key='-IMAGE-')]
+            ])
+        ],
+        [
+            sg.Column([
+                [sg.Button('Ligar caixa de detecção', key='-ENABLE-BOUNDING-BOX-')],
+                [sg.Button('Desligar caixa de detecção', key='-DISABLE-BOUNDING-BOX-')]
+            ])
+        ]
     ]
 
     window = sg.Window('Window Title', layout, resizable=False, finalize=True)
-    threading.Thread(target=updateImage, args=(window, cam, model), daemon=True).start()
+    threading.Thread(target=updateImage, args=(window, cam, model, userChoices), daemon=True).start()
 
     # Event Loop
     while True:
         event, values = window.read()
         if event == sg.WIN_CLOSED or event == 'Cancel':
             break
+
+        elif event == '-DISABLE-BOUNDING-BOX-':
+            userChoices['BoundingBoxOn'] = False
+        elif event == '-ENABLE-BOUNDING-BOX-':
+            userChoices['BoundingBoxOn'] = True
+
 
     window.close()
     cam.release()  # Release the camera when done
