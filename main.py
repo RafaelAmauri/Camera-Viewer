@@ -2,9 +2,14 @@ import FreeSimpleGUI as sg
 import cv2
 import numpy as np
 import io
-import threading
+from PIL import Image
 import time
 from ultralytics import YOLO
+
+# TODO Ver mediapipe
+#  import mediapipe as mp
+
+#  mp_holistic = mp.solutions.holistic
 
 
 def openCamera(cam):
@@ -52,11 +57,12 @@ def updateImage(window, cam, model, userChoices):
     picture = openCamera(cam)
     picture = cv2.resize(picture, (540, 400), interpolation=cv2.INTER_LANCZOS4)
     if picture is not None:
-        results = model.predict(picture, classes=[0], verbose=False)
-
+        results = model.predict(picture, verbose=False)
 
         # Edge Detect
         if userChoices['EdgeDetectOn']:
+            picture = cv2.cvtColor(picture, cv2.COLOR_BGR2GRAY)
+    
             grad_x = cv2.Sobel(picture, cv2.CV_16S, 1, 0, ksize=3, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
             grad_y = cv2.Sobel(picture, cv2.CV_16S, 0, 1, ksize=3, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
                 
@@ -64,7 +70,7 @@ def updateImage(window, cam, model, userChoices):
             abs_grad_y = cv2.convertScaleAbs(grad_y)
             picture = cv2.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
 
-
+        
         for result in results:
             # Show KeyPoints
             if userChoices['KeyPointsOn']:
@@ -82,7 +88,7 @@ def updateImage(window, cam, model, userChoices):
                 for obj in result.boxes:
                     for x0, y0, x1, y1 in obj.xyxy:
                         cv2.rectangle(picture, (int(x0), int(y0)), (int(x1), int(y1)), color=(255, 255, 0), thickness=2)
-
+        
 
         picture_data = numpyToImg(picture)
         window['-IMAGE-'].update(data=picture_data)
