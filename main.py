@@ -212,11 +212,11 @@ def updateImage(window, cam, model, userChoices):
                             
                             # Para centralizar o olho no centro da lente, puxar 45px * downsampleFactor pra esquerda e 
                             # 60px * downsampleFactor pra cima
-                            downsampleFactor = (rightEyeX-leftEyeX)/40 # distancia que olho esquerdo está do direito / distancia que deveria ser (em px)
-                            resX = int(130 * downsampleFactor)
-                            resY = int(130 * downsampleFactor)
-                            offsetX = int(45 * downsampleFactor)
-                            offsetY = int(60 * downsampleFactor)
+                            downsampleFactor = (rightEyeX-leftEyeX)/60 # distancia que olho esquerdo está do direito / distancia que deveria ser (em px)
+                            resX = int(180 * downsampleFactor)
+                            resY = int(180 * downsampleFactor)
+                            offsetX = int(58 * downsampleFactor)
+                            offsetY = int(85 * downsampleFactor)
                             angle = -np.degrees(np.arctan2(rightEyeY - leftEyeY, rightEyeX - leftEyeX))
                             try:                
                                 glassesRotated = rotateImage(glasses, angle)
