@@ -65,7 +65,26 @@ def scharrEdgeDetect(picture):
     return cv2.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
 
 
+def rotateImage(image, angle):
+    (h, w)  = image.shape[:2]
+    center = (w // 2, h // 2)
+    M       = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LANCZOS4)
+
+    return rotated
+
+
 def updateImage(window, cam, model, userChoices):
+
+    glasses     = cv2.imread("./assets/glasses.png", cv2.IMREAD_UNCHANGED)
+    b, g, r, a  = cv2.split(glasses)
+    glasses     = cv2.merge((b, g, r))
+    maskGlasses = a.astype(float) / 255.0
+
+    mustache     = cv2.imread('./assets/mustache.png', cv2.IMREAD_UNCHANGED)
+    b, g, r, a   = cv2.split(mustache)
+    mustache     = cv2.merge((b, g, r))
+    maskMustache = a.astype(float) / 255.0
 
     keyPointColors = [
         (255, 0, 0),    # Blue
@@ -131,29 +150,100 @@ def updateImage(window, cam, model, userChoices):
 
         for result in results:
             # Show KeyPoints
-            if userChoices['KeyPointsOn']:
-                for kp in result.keypoints:
-                    for detection in kp.xy:
-                        previousPoint = -1
-                        detectedBodyParts = []
-                        for idx, (x, y) in enumerate(detection):
-                            if x != 0 and y != 0:
-                                detectedBodyParts.append(idx)
+            for kp in result.keypoints:
+                for detection in kp.xy:
+                    previousPoint = -1
+                    detectedBodyParts = []
+                    for idx, (x, y) in enumerate(detection):
+                        if x != 0 and y != 0:
+                            detectedBodyParts.append(idx)
+
+                            if userChoices['KeyPointsOn']:
                                 cv2.circle(picture, center=(int(x), int(y)), radius=5, color=keyPointColors[idx], thickness=-1)
 
-                        for part1, part2, color in bodyPartConnections:
-                            if part1 in detectedBodyParts and part2 in detectedBodyParts:
-                                x1, y1 = detection[part1]
-                                x2, y2 = detection[part2]
-                                cv2.line(picture, (int(x1), int(y1)), (int(x2), int(y2)), color=color, thickness=2)
+                                for part1, part2, color in bodyPartConnections:
+                                    if part1 in detectedBodyParts and part2 in detectedBodyParts:
+                                        x1, y1 = detection[part1]
+                                        x2, y2 = detection[part2]
+                                        cv2.line(picture, (int(x1), int(y1)), (int(x2), int(y2)), color=color, thickness=2)
+
+
+                    if userChoices['GlassesOn']:
+                        if 1 in detectedBodyParts and 2 in detectedBodyParts:
+                            leftEye  = detection[2]
+                            rightEye = detection[1]
+
+                            leftEyeX, leftEyeY   = int(leftEye[0]), int(leftEye[1])
+                            rightEyeX, rightEyeY = int(rightEye[0]), int(rightEye[1])
+                            
+                            # Para centralizar o olho no centro da lente, puxar 45px * downsampleFactor pra esquerda e 
+                            # 60px * downsampleFactor pra cima
+                            downsampleFactor = (rightEyeX-leftEyeX)/40 # distancia que olho esquerdo está do direito / distancia que deveria ser (em px)
+                            resX = int(130 * downsampleFactor)
+                            resY = int(130 * downsampleFactor)
+                            offsetX = int(45 * downsampleFactor)
+                            offsetY = int(60 * downsampleFactor)
+                            angle = -np.degrees(np.arctan2(rightEyeY - leftEyeY, rightEyeX - leftEyeX))
+                            try:                
+                                glassesRotated = rotateImage(glasses, angle)
+                                maskRotated     = rotateImage(maskGlasses, angle)
+                                glassesResized = cv2.resize(glassesRotated, (resX, resY), interpolation=cv2.INTER_LANCZOS4)
+                                maskResized    = cv2.resize(maskRotated, (resX, resY), interpolation=cv2.INTER_LANCZOS4)
+                                roi            = picture[leftEyeY - offsetY:leftEyeY - offsetY + resY, leftEyeX - offsetX:leftEyeX - offsetX + resY]
+
+                                # Blend the glasses with the ROI respecting the alpha channel
+                                for c in range(3):  # For each channel
+                                    roi[:, :, c] = roi[:, :, c] * (1 - maskResized) + glassesResized[:, :, c] * maskResized
+
+
+                                picture[leftEyeY - offsetY:leftEyeY - offsetY + resY, leftEyeX - offsetX:leftEyeX - offsetX + resY] = roi
+
+                            except Exception as e:
+                                print(e)
+
+                    if userChoices['MustacheOn']:
+                        if 0 in detectedBodyParts:
+                            nose   = detection[0]
+                            noseX, noseY = int(nose[0]), int(nose[1])
+
+                            leftEye  = detection[2]
+                            rightEye = detection[1]
+
+                            leftEyeX, leftEyeY   = int(leftEye[0]), int(leftEye[1])
+                            rightEyeX, rightEyeY = int(rightEye[0]), int(rightEye[1])
+                            
+                            
+                            # Para centralizar o bigode abaixo do nariz, empurrar o y 52 px pra baixo
+                            downsampleFactor = (rightEyeX-leftEyeX)/100 # distancia que olho esquerdo está do direito / distancia que deveria ser (em px)
+                            distX = int(150 * downsampleFactor)
+                            distY = int(150 * downsampleFactor)
+                            offsetX = int(75 * downsampleFactor)
+                            offsetY = int(35 * downsampleFactor)
+                            angle = -np.degrees(np.arctan2(rightEyeY - leftEyeY, rightEyeX - leftEyeX))
+
+                            try:                
+                                mustacheRotated = rotateImage(mustache, angle)
+                                maskRotated     = rotateImage(maskMustache, angle)
+                                mustacheResized = cv2.resize(mustacheRotated, (distX, distY), interpolation=cv2.INTER_LANCZOS4)
+                                maskResized     = cv2.resize(maskRotated, (distX, distY), interpolation=cv2.INTER_LANCZOS4)
+                                roi             = picture[noseY - offsetY:noseY - offsetY + distY, noseX - offsetX:noseX - offsetX + distX]
+                                
+                                # Blend the mustache with the ROI respecting the alpha channel
+                                for c in range(3):  # For each channel
+                                    roi[:, :, c] = roi[:, :, c] * (1 - maskResized) + mustacheResized[:, :, c] * maskResized
+
+                                picture[noseY - offsetY:noseY - offsetY + distY, noseX - offsetX:noseX - offsetX + distX] = roi
+
+                            except Exception as e:
+                                print(e)
 
 
             # Show Bounding Box
             if userChoices['BoundingBoxOn']:
                 for obj in result.boxes:
-                    for x0, y0, x1, y1 in obj.xyxy:
+                    for (x0, y0, x1, y1), detectedClass, conf in zip(obj.xyxy, obj.cls, obj.conf):
                         cv2.rectangle(picture, (int(x0), int(y0)), (int(x1), int(y1)), color=(255, 255, 0), thickness=2)
-        
+                        cv2.putText(picture, f"{model.names[detectedClass.item()]} - {int(conf * 100)}%", (int(x0), int(y0) -15), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
 
         picture_data = numpyToImg(picture)
         window['-IMAGE-'].update(data=picture_data)
@@ -174,6 +264,8 @@ def mainWindow():
                     'EdgeDetectOn': False,
                     'SwirlOn': False,
                     'ProjectionOn': False,
+                    'GlassesOn': False,
+                    'MustacheOn': False,
                     'SwirlAmount': 3
                 }
     
@@ -188,7 +280,9 @@ def mainWindow():
     layoutLeft  = [[sg.Image(data=picture_data, key='-IMAGE-')]]
     layoutMiddle = [
                     [sg.Button('Ligar caixas de detecção', key='-ENABLE-BOUNDING-BOX-'), sg.Button('Desligar caixas de detecção', key='-DISABLE-BOUNDING-BOX-')],
-                    [sg.Button('Ligar marcadores de corpo', key='-ENABLE-KEYPOINTS-'), sg.Button('Desligar marcadores de corpo', key='-DISABLE-KEYPOINTS-')]
+                    [sg.Button('Ligar marcadores de corpo', key='-ENABLE-KEYPOINTS-'), sg.Button('Desligar marcadores de corpo', key='-DISABLE-KEYPOINTS-')],
+                    [sg.Button('Ligar filtro de óculos', key='-ENABLE-GLASSES-'), sg.Button('Desligar filtro de óculos', key='-DISABLE-GLASSES-')],
+                    [sg.Button('Ligar filtro de bigode', key='-ENABLE-MUSTACHE-'), sg.Button('Desligar filtro de bigode', key='-DISABLE-MUSTACHE-')]
                 ]
     
     layoutRight = [
@@ -240,6 +334,17 @@ def mainWindow():
         elif event == '-DISABLE-PROJECTION-':
             userChoices['ProjectionOn'] = False
         
+        elif event == '-ENABLE-GLASSES-':
+            userChoices['GlassesOn'] = True
+        elif event == '-DISABLE-GLASSES-':
+            userChoices['GlassesOn'] = False
+        
+        elif event == '-ENABLE-MUSTACHE-':
+            userChoices['MustacheOn'] = True
+        elif event == '-DISABLE-MUSTACHE-':
+            userChoices['MustacheOn'] = False
+
+
         userChoices['SwirlAmount'] = values['-SWIRL-STRENGTH-']
 
 
