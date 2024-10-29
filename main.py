@@ -73,6 +73,34 @@ def rotateImage(image, angle):
 
     return rotated
 
+# TODO Terminar
+def applyFilter(picture, userChoices, detectedBodyParts, detection):
+    if 0 in detectedBodyParts and 1 in detectedBodyParts and 2 in detectedBodyParts:
+        glasses     = cv2.imread("./assets/glasses.png", cv2.IMREAD_UNCHANGED)
+        b, g, r, a  = cv2.split(glasses)
+        glasses     = cv2.merge((b, g, r))
+        maskGlasses = a.astype(float) / 255.0
+
+        mustache     = cv2.imread('./assets/mustache.png', cv2.IMREAD_UNCHANGED)
+        b, g, r, a   = cv2.split(mustache)
+        mustache     = cv2.merge((b, g, r))
+        maskMustache = a.astype(float) / 255.0
+
+        topHat      = cv2.imread('./assets/tophat.png', cv2.IMREAD_UNCHANGED)
+        b, g, r, a  = cv2.split(topHat)
+        topHat      = cv2.merge((b, g, r))
+        maskTopHat  = a.astype(float) / 255.0
+
+        nose   = detection[0]
+        noseX, noseY = int(nose[0]), int(nose[1])
+
+        leftEye  = detection[2]
+        rightEye = detection[1]
+
+        leftEyeX, leftEyeY   = int(leftEye[0]), int(leftEye[1])
+        rightEyeX, rightEyeY = int(rightEye[0]), int(rightEye[1])
+
+
 
 def updateImage(window, cam, model, userChoices):
 
@@ -85,6 +113,12 @@ def updateImage(window, cam, model, userChoices):
     b, g, r, a   = cv2.split(mustache)
     mustache     = cv2.merge((b, g, r))
     maskMustache = a.astype(float) / 255.0
+
+    topHat      = cv2.imread('./assets/tophat.png', cv2.IMREAD_UNCHANGED)
+    b, g, r, a  = cv2.split(topHat)
+    topHat      = cv2.merge((b, g, r))
+    maskTopHat  = a.astype(float) / 255.0
+
 
     keyPointColors = [
         (255, 0, 0),    # Blue
@@ -108,9 +142,9 @@ def updateImage(window, cam, model, userChoices):
 
 
     bodyPartConnections = [
-        (0, 1,   keyPointColors[3]),  # Nose -> Left Eye
-        (1, 2,   keyPointColors[3]),  # Left Eye -> Right Eye
-        (0, 2,   keyPointColors[3]),  # Nose -> Right Eye
+        (0, 2,   keyPointColors[3]),  # Nose -> Left Eye
+        (2, 1,   keyPointColors[3]),  # Left Eye -> Right Eye
+        (0, 1,   keyPointColors[3]),  # Nose -> Right Eye
 
         (6, 5,   keyPointColors[3]),  # Right Shoulder -> Left Shoulder
 
@@ -202,7 +236,7 @@ def updateImage(window, cam, model, userChoices):
                                 print(e)
 
                     if userChoices['MustacheOn']:
-                        if 0 in detectedBodyParts:
+                        if 0 in detectedBodyParts and 1 in detectedBodyParts and 2 in detectedBodyParts:
                             nose   = detection[0]
                             noseX, noseY = int(nose[0]), int(nose[1])
 
@@ -236,7 +270,42 @@ def updateImage(window, cam, model, userChoices):
 
                             except Exception as e:
                                 print(e)
+                        
+                    #TODO FIX
+                    '''
+                    if True:#userChoices['TopHatOn']:
+                        if 3 in detectedBodyParts and 4 in detectedBodyParts:
+                            leftEye  = detection[4]
+                            rightEye = detection[3]
 
+                            leftEyeX, leftEyeY   = int(leftEye[0]), int(leftEye[1])
+                            rightEyeX, rightEyeY = int(rightEye[0]), int(rightEye[1])
+                            
+                            
+                            # Para centralizar o bigode abaixo do nariz, empurrar o y 52 px pra baixo
+                            downsampleFactor = (rightEyeX-leftEyeX)/140 # distancia que olho esquerdo está do direito / distancia que deveria ser (em px)
+                            distX = int(250 * downsampleFactor)
+                            distY = int(250 * downsampleFactor)
+                            offsetX = int(50 * downsampleFactor)
+                            offsetY = int(240 * downsampleFactor)
+                            angle = -np.degrees(np.arctan2(rightEyeY - leftEyeY, rightEyeX - leftEyeX))
+
+                            try:                
+                                topHatRotated   = rotateImage(topHat, angle)
+                                maskRotated     = rotateImage(maskTopHat, angle)
+                                topHatResized   = cv2.resize(topHat, (distX, distY), interpolation=cv2.INTER_LANCZOS4)
+                                maskResized     = cv2.resize(maskRotated, (distX, distY), interpolation=cv2.INTER_LANCZOS4)
+                                roi             = picture[leftEyeY - offsetY:leftEyeY - offsetY + distY, leftEyeX - offsetX:leftEyeX - offsetX + distX]
+                                
+                                # Blend the mustache with the ROI respecting the alpha channel
+                                for c in range(3):  # For each channel
+                                    roi[:, :, c] = roi[:, :, c] * (1 - maskResized) + topHatResized[:, :, c] * maskResized
+
+                                picture[leftEyeY - offsetY:leftEyeY - offsetY + distY, leftEyeX - offsetX:leftEyeX - offsetX + distX] = roi
+
+                            except Exception as e:
+                                print(e)
+                    '''
 
             # Show Bounding Box
             if userChoices['BoundingBoxOn']:
