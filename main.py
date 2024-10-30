@@ -1,11 +1,7 @@
 import FreeSimpleGUI as sg
 import cv2
 import numpy as np
-import io
-from PIL import Image
-import time
 from ultralytics import YOLO
-from PIL import Image, ImageFilter
 import skimage.transform
 
 
