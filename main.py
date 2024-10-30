@@ -6,71 +6,131 @@ import skimage.transform
 
 
 def openCamera(cam):
+    """Capture a frame from the camera.
+
+    Args:
+        cam: The camera object.
+
+    Returns:
+        frame: The captured frame or None if the frame couldn't be received.
+    """
     ret, frame = cam.read()
     if not ret:
         print("Can't receive frame (stream end?). Exiting ...")
         return None
     return frame
 
-
 def numpyToImg(img):
+    """Convert a NumPy image array to PNG format as bytes.
+
+    Args:
+        img: The image array.
+
+    Returns:
+        bytes: The PNG image data or None if encoding fails.
+    """
     if img is None:
         return None
-    # Encode the image as PNG
     success, encoded_image = cv2.imencode('.png', img)
     if success:
-        return encoded_image.tobytes()  # Return as bytes
+        return encoded_image.tobytes()  # Return the encoded image as bytes
     return None
 
 def reprojectionEffect(picture):
-    rows,cols,ch = picture.shape
+    """Apply reprojection effects to the image.
 
-    # x,y points are cw from top left
-    src_interest_pts = np.float32([[0,0],[640,0],[640,480],[0,480]])
-    Affine_interest_pts = np.float32([[551*640/1280,224*480/720],[843*640/1280,67*480/720],[903*640/1280,301*480/720],[608*640/1280,455*480/720]])
-    Projective_interest_pts = np.float32([[195,56],[494,158],[432,498],[36,183]])
+    Args:
+        picture: The input image.
 
-    M = cv2.estimateAffine2D(src_interest_pts ,Affine_interest_pts)[0]
-    Affinedst = cv2.warpAffine(picture,M,(cols,rows))
+    Returns:
+        The transformed image combining affine and projective effects.
+    """
+    rows, cols, ch = picture.shape
 
-    M=cv2.getPerspectiveTransform(src_interest_pts ,Projective_interest_pts)
-    Projectivedst=cv2.warpPerspective(picture,M,(cols,rows))
+    # Define source and target points for affine and projective transformations
+    src_interest_pts = np.float32([[0, 0], [640, 0], [640, 480], [0, 480]])
+    Affine_interest_pts = np.float32([[551 * 640 / 1280, 224 * 480 / 720], 
+                                        [843 * 640 / 1280, 67 * 480 / 720], 
+                                        [903 * 640 / 1280, 301 * 480 / 720], 
+                                        [608 * 640 / 1280, 455 * 480 / 720]])
+    Projective_interest_pts = np.float32([[195, 56], [494, 158], [432, 498], [36, 183]])
 
-    return Affinedst+Projectivedst
+    # Compute affine and projective transformations
+    M = cv2.estimateAffine2D(src_interest_pts, Affine_interest_pts)[0]
+    Affinedst = cv2.warpAffine(picture, M, (cols, rows))
 
+    M = cv2.getPerspectiveTransform(src_interest_pts, Projective_interest_pts)
+    Projectivedst = cv2.warpPerspective(picture, M, (cols, rows))
+
+    return Affinedst + Projectivedst
 
 def swirlEffect(picture, amount):
-    cx = 320
-    cy = 240
-    dist = 400
-    angle = 0
-    border_color = (128,128,128)
+    """Apply a swirling effect to the image.
 
-    return skimage.transform.swirl(picture, center=(cx,cy), rotation=angle, strength=amount, radius=dist, preserve_range=True).astype(np.uint8)
+    Args:
+        picture: The input image.
+        amount: The strength of the swirl effect.
 
+    Returns:
+        The swirled image.
+    """
+    cx = 320  # Center x-coordinate
+    cy = 240  # Center y-coordinate
+    dist = 400  # Swirl radius
+    angle = 0  # Rotation angle
+    border_color = (128, 128, 128)  # Border color (not used)
+
+    return skimage.transform.swirl(picture, center=(cx, cy), rotation=angle, strength=amount, radius=dist, preserve_range=True).astype(np.uint8)
 
 def scharrEdgeDetect(picture):
-    picture = cv2.cvtColor(picture, cv2.COLOR_BGR2GRAY)
+    """Detect edges in the image using the Scharr operator.
 
-    grad_x = cv2.Sobel(picture, cv2.CV_16S, 1, 0, ksize=3, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
-    grad_y = cv2.Sobel(picture, cv2.CV_16S, 0, 1, ksize=3, scale=1, delta=0, borderType=cv2.BORDER_DEFAULT)
-        
-    abs_grad_x = cv2.convertScaleAbs(grad_x)
-    abs_grad_y = cv2.convertScaleAbs(grad_y)
+    Args:
+        picture: The input image.
+
+    Returns:
+        The edge-detected image.
+    """
+    picture = cv2.cvtColor(picture, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+
+    # Compute the gradient along the x and y directions
+    grad_x = cv2.Sobel(picture, cv2.CV_16S, 1, 0, ksize=3)
+    grad_y = cv2.Sobel(picture, cv2.CV_16S, 0, 1, ksize=3)
+
+    abs_grad_x = cv2.convertScaleAbs(grad_x)  # Convert to absolute values
+    abs_grad_y = cv2.convertScaleAbs(grad_y)  # Convert to absolute values
     
-    return cv2.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
-
+    return cv2.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)  # Combine gradients
 
 def rotateImage(image, angle):
-    (h, w)  = image.shape[:2]
-    center  = (w // 2, h // 2)
-    M       = cv2.getRotationMatrix2D(center, angle, 1.0)
-    rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LANCZOS4)
+    """Rotate the image by a specified angle.
+
+    Args:
+        image: The input image.
+        angle: The angle to rotate the image.
+
+    Returns:
+        The rotated image.
+    """
+    (h, w) = image.shape[:2]
+    center = (w // 2, h // 2)  # Get the center of the image
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)  # Get rotation matrix
+    rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LANCZOS4)  # Apply rotation
 
     return rotated
 
-
 def applyFilters(picture, userChoices, detectedBodyParts, detection):
+    """Apply selected filters to the image based on detected body parts.
+
+    Args:
+        picture: The input image.
+        userChoices: User's filter settings.
+        detectedBodyParts: List of detected body parts.
+        detection: Keypoint detections.
+
+    Returns:
+        The modified image with applied filters.
+    """
     if 0 in detectedBodyParts and 1 in detectedBodyParts and 2 in detectedBodyParts:
         leftEye  = detection[2]
         rightEye = detection[1]
@@ -86,20 +146,20 @@ def applyFilters(picture, userChoices, detectedBodyParts, detection):
                 overlay     = cv2.merge((b, g, r))
                 overlayMask = a.astype(float) / 255.0
 
-                # referencePoint é definido porque cada filtro depende de um lugar pra ser aplicado.
-                # O oculos por exemplo usa o olho direito como referencia, porque os oculos vao nos olhos, e facilita as contas dos offsets.
-                # O bigode ja usa o nariz como referencia, porque aí sabendo a posição do nariz, é só descer um pouco no eixo Y que chegamos na regiao
+                # referencePoint é definido porque cada filtro precisa ser aplicado em um lugar específico.
+                # Por exemplo, o filtro de óculos usa o olho direito como referência, porque os óculos vão nos olhos, e pegar a posição do olho
+                # direito como referência facilita as contas dos offsets.
+                # O bigode já usa o nariz como referencia, porque sabendo a posição do nariz, é só descer um pouco no eixo Y que chegamos na região
                 # certa para o bigode. Os reference points estão definidos para cada filtro no json userChoices.
                 referencePoint = detection[userChoices['Filters'][currentFilter]['ReferencePoint']]
                 referencePointX, referencePointY = int(referencePoint[0]), int(referencePoint[1])
 
 
                 # distancia que olho esquerdo está do direito / distancia que deveria ser (em px) 
-                #(100px é +- a distancia do centro de uma lente para a outra no .png)
                 downsampleFactor = (rightEyeX - leftEyeX) / userChoices['Filters'][currentFilter]['IdealDistance']
-
-                resX = int(overlay.shape[1] * downsampleFactor)
-                resY = int(overlay.shape[0] * downsampleFactor)
+                
+                newResX = int(overlay.shape[1] * downsampleFactor)
+                newResY = int(overlay.shape[0] * downsampleFactor)
 
                 offsetX = int(userChoices['Filters'][currentFilter]['OffsetX'] * downsampleFactor)
                 offsetY = int(userChoices['Filters'][currentFilter]['OffsetY'] * downsampleFactor)
@@ -107,20 +167,20 @@ def applyFilters(picture, userChoices, detectedBodyParts, detection):
                 angle = -np.degrees(np.arctan2(rightEyeY - leftEyeY, rightEyeX - leftEyeX))
 
                 try:
-                    overlayResized      = cv2.resize(overlay, (resX, resY), interpolation=cv2.INTER_LANCZOS4)
-                    overlayMaskResized  = cv2.resize(overlayMask, (resX, resY), interpolation=cv2.INTER_LANCZOS4)
+                    overlayResized      = cv2.resize(overlay, (newResX, newResY), interpolation=cv2.INTER_LANCZOS4)
+                    overlayMaskResized  = cv2.resize(overlayMask, (newResX, newResY), interpolation=cv2.INTER_LANCZOS4)
 
                     overlayResized             = rotateImage(overlayResized, angle)
                     overlayMaskResized         = rotateImage(overlayMaskResized, angle)
-                    roi                 = picture[referencePointY - offsetY:referencePointY - offsetY + resY, referencePointX - offsetX:referencePointX - offsetX + resY]
+                    roi                 = picture[referencePointY - offsetY:referencePointY - offsetY + newResY, referencePointX - offsetX:referencePointX - offsetX + newResY]
 
-                    # Multiplica os pixels pela camada alpha para aplicar transparencia
+                    # Multiplica os pixels pela camada alpha para aplicar transparência
                     for c in range(3):
                         # WTF
                         roi[:, :, c] = roi[:, :, c] * (1 - overlayMaskResized) + overlayResized[:, :, c] * overlayMaskResized
 
-                    # Adiciona à foto o resultado final da roi, que é o overlay do óculos (rotacionado ou nao), com a camada alpha aplicada
-                    picture[referencePointY - offsetY:referencePointY - offsetY + resY, referencePointX - offsetX:referencePointX - offsetX + resY] = roi
+                    # Adiciona à imagem o resultado final da roi, que é o overlay do filtro (rotacionado ou não), com a camada alpha aplicada
+                    picture[referencePointY - offsetY:referencePointY - offsetY + newResY, referencePointX - offsetX:referencePointX - offsetX + newResY] = roi
 
                 except Exception as e:
                     print(e)
@@ -225,9 +285,7 @@ def updateImage(window, cam, model, userChoices):
         if userChoices['EdgeDetectOn']:
             picture = scharrEdgeDetect(picture)
         
-
-        picture = cv2.resize(picture, (int(640*1.2), int(480 * 1.2)), interpolation=cv2.INTER_LANCZOS4)
-
+        
         picture_data = numpyToImg(picture)
         window['-IMAGE-'].update(data=picture_data)
         window.refresh()
